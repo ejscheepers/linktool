@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
+    "db:backup": "node scripts/backup-db.mjs",
     "studio": "drizzle-kit studio",
     "update-check": "npx npm-check-updates",
     "update-safe": "npx npm-check-updates -u --target minor && npm install"

@@ -12,6 +12,7 @@ import {
 } from "@/models/schema.server";
 import { db } from "@/utils/db.server";
 import { authSecret, authUrl } from "./env.server";
+import { trustedOrigins } from "./origins";
 
 /**
  * Sign-up is only open while the database has no users. That covers the very
@@ -35,6 +36,7 @@ export const auth = betterAuth({
     autoSignIn: true,
     minPasswordLength: 8,
   },
+  trustedOrigins: trustedOrigins(authUrl),
   databaseHooks: {
     user: {
       create: {

@@ -46,6 +46,11 @@ on first use.
 | `UPLOAD_DIR`        | no       | `./data/uploads`        | Where WebP images are written. In Docker: `/data/uploads`. |
 | `APP_TIMEZONE`      | no       | `Africa/Johannesburg`   | Timezone used by the date pickers and formatting.|
 | `PORT`              | no       | `3000` (serve default)  | Docker sets `8000`.                              |
+| `ALLOWED_ACTION_ORIGINS` | no  | primary host            | Extra hosts for React Router action posts. Build-time in Coolify. |
+| `TRUSTED_ORIGINS`   | no       | `BETTER_AUTH_URL`       | Extra full origins better-auth should trust (comma-separated). |
+
+`links.dailywine.co.za` is built into `app/lib/origins.ts` as the primary host,
+so a standard deploy needs neither of the last two variables.
 
 ## How link visibility works
 
@@ -81,17 +86,93 @@ The compose file mounts a named volume at `/data`. Everything lives there:
 Back up that volume (or just that folder) and you have a complete backup. To
 restore, put the folder back and start the container.
 
-### Deploying on Coolify (or any Docker host)
+### Deploying on Coolify
 
-1. Create the app from this repository, using the `Dockerfile`.
-2. Set `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL=https://links.dailywine.co.za`,
-   `APP_TIMEZONE=Africa/Johannesburg`, and mount a persistent volume at `/data`.
-3. Point DNS for `links.dailywine.co.za` at the server (A record for the IP, or
-   a CNAME if you use a proxy) and let Coolify/Traefik issue the TLS certificate.
-4. Open `https://links.dailywine.co.za/setup`, create the account, and start
-   adding links.
+This is the same shape as the other React Router apps: Coolify builds the repo's
+`Dockerfile`, injects env vars, and terminates TLS. The difference is that
+linktool keeps its state in one volume instead of a standalone Postgres.
 
-`/resources/up` is a plain-text health endpoint used by the Docker healthcheck.
+**1. Create the resource**
+
+- New Resource → Application → your GitHub repo, branch `main`.
+- Build pack: **Dockerfile** (path `/Dockerfile`).
+- Ports exposed: **8000** (`EXPOSE 8000` in the image; `PORT=8000` is baked in).
+- Health check: enabled, path **`/resources/up`**, port `8000`.
+
+**2. Environment variables (runtime)**
+
+```dotenv
+BETTER_AUTH_SECRET=<openssl rand -base64 32>
+BETTER_AUTH_URL=https://links.dailywine.co.za
+APP_TIMEZONE=Africa/Johannesburg
+```
+
+`DATABASE_PATH` and `UPLOAD_DIR` already default to `/data/…` in the image, so
+they can be left out.
+
+**3. Persistent storage**
+
+Add a volume mount to the app:
+
+| Name       | Source (volume) | Destination |
+| ---------- | --------------- | ----------- |
+| `linktool-data` | named volume | `/data` |
+
+Everything stateful lives in `/data`:
+
+- `/data/app.db` — SQLite database (plus `-wal` / `-shm` files)
+- `/data/uploads` — cropped WebP images
+
+No other services are required: no Postgres, no Redis.
+
+**4. Domain and DNS**
+
+Point `links.dailywine.co.za` at the Coolify server (A record, or CNAME if you
+proxy through Cloudflare) and add the domain to the app. Coolify/Traefik issues
+the certificate. Keep `BETTER_AUTH_URL` on `https://` — better-auth uses it for
+cookie security.
+
+**5. First run**
+
+Open `https://links.dailywine.co.za/setup` and create the admin account. The
+route closes itself permanently after the first user exists.
+
+#### Notes specific to this setup
+
+- **Keep replicas at 1.** The SQLite file lives on a per-container volume; two
+  replicas would drift apart. A link page does not need more than one.
+- **Build-time origins.** React Router bakes `allowedActionOrigins` into the
+  build. `links.dailywine.co.za` is already in `app/lib/origins.ts`. If you
+  deploy to another domain, either edit that constant or set
+  `ALLOWED_ACTION_ORIGINS` (and `TRUSTED_ORIGINS`) as **build-time** variables
+  in Coolify.
+- **Redeploys** keep the volume; the container re-applies Drizzle migrations on
+  boot. Migrations are additive, so rolling back the image is safe as long as
+  the schema change was additive.
+
+#### Backups
+
+The volume is the backup unit. `npm run db:backup` uses SQLite's online backup
+API, so it is safe while the app is running:
+
+```bash
+# On the host (uses ./data/app.db)
+npm run db:backup
+
+# In the Coolify container (writes /data/backups/app-<timestamp>.db)
+docker exec <container> npm run db:backup
+```
+
+Copy the resulting file (or the whole volume) somewhere else, and prune old
+backups with a scheduled job if you want. Restoring is: stop the app, replace
+`/data/app.db` with the backup, start it. If you copy files by hand rather than
+using the backup command, take `app.db`, `app.db-wal` and `app.db-shm` together.
+
+If you enable Coolify's volume backup feature on the server, that works too.
+
+`/resources/up` is a plain-text health endpoint used by the Docker healthcheck
+and by Coolify.
+
 
 ## Scripts
 
@@ -103,6 +184,7 @@ restore, put the folder back and start the container.
 | `npm run typecheck`  | Route typegen + TypeScript                    |
 | `npm run db:generate`| Generate a migration after editing the schema |
 | `npm run db:migrate` | Apply migrations manually                     |
+| `npm run db:backup`  | Online SQLite backup into `./data/backups`    |
 
 ## Project layout
 
