@@ -8,7 +8,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "@/models/schema.server";
 
 const databasePath =
-  process.env.DATABASE_PATH || path.join(process.cwd(), "data", "app.db");
+  process.env.DATABASE_PATH || path.join(process.cwd(), "data", "database.sqlite");
 
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 

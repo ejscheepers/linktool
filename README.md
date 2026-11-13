@@ -33,7 +33,7 @@ npm run dev
 Open http://localhost:5173/setup and create the admin account. Then add links at
 `/admin`, and set your page title, bio and colours at `/admin/profile`.
 
-Migrations run automatically on startup, and `npm run dev` creates `./data/app.db`
+Migrations run automatically on startup, and `npm run dev` creates `./data/database.sqlite`
 on first use.
 
 ## Environment
@@ -42,7 +42,7 @@ on first use.
 | ------------------- | -------- | ----------------------- | ------------------------------------------------ |
 | `BETTER_AUTH_SECRET`| yes      | dev fallback only       | Long random string. Generate with `openssl rand -base64 32`. |
 | `BETTER_AUTH_URL`   | yes      | `http://localhost:5173` | Public origin, e.g. `https://links.dailywine.co.za`. |
-| `DATABASE_PATH`     | no       | `./data/app.db`         | SQLite file. In Docker: `/data/app.db`.          |
+| `DATABASE_PATH`     | no       | `./data/database.sqlite`| SQLite file. In Docker: `/data/database.sqlite`. |
 | `UPLOAD_DIR`        | no       | `./data/uploads`        | Where WebP images are written. In Docker: `/data/uploads`. |
 | `APP_TIMEZONE`      | no       | `Africa/Johannesburg`   | Timezone used by the date pickers and formatting.|
 | `PORT`              | no       | `3000` (serve default)  | Docker sets `8000`.                              |
@@ -80,7 +80,7 @@ docker compose up -d --build
 
 The compose file mounts a named volume at `/data`. Everything lives there:
 
-- `/data/app.db` — SQLite database (plus `-wal` / `-shm` files)
+- `/data/database.sqlite` — SQLite database (plus `-wal` / `-shm` files)
 - `/data/uploads` — cropped images
 
 Back up that volume (or just that folder) and you have a complete backup. To
@@ -118,9 +118,15 @@ Add a volume mount to the app:
 | ---------- | --------------- | ----------- |
 | `linktool-data` | named volume | `/data` |
 
+Or create a **SQLite** database resource in Coolify and link it to the app: Coolify
+mounts that resource's volume at `/data` and injects
+`DATABASE_PATH=/data/database.sqlite`. The image default uses the same filename,
+so the app and the database resource can never disagree. If you change the
+resource's `SQLITE_DATABASES` name, set `DATABASE_PATH` to match it.
+
 Everything stateful lives in `/data`:
 
-- `/data/app.db` — SQLite database (plus `-wal` / `-shm` files)
+- `/data/database.sqlite` — SQLite database (plus `-wal` / `-shm` files)
 - `/data/uploads` — cropped WebP images
 
 No other services are required: no Postgres, no Redis.
@@ -149,6 +155,10 @@ route closes itself permanently after the first user exists.
 - **Redeploys** keep the volume; the container re-applies Drizzle migrations on
   boot. Migrations are additive, so rolling back the image is safe as long as
   the schema change was additive.
+- **Never enable "Delete unused volumes"** in the Coolify server's Docker
+  cleanup settings. That job runs `docker volume prune -af`, which deletes this
+  database's volume whenever the container happens to be stopped (a stop/start,
+  a crash loop, or an overnight stop) — the data is gone for good.
 
 #### Backups
 
@@ -156,7 +166,7 @@ The volume is the backup unit. `npm run db:backup` uses SQLite's online backup
 API, so it is safe while the app is running:
 
 ```bash
-# On the host (uses ./data/app.db)
+# On the host (uses ./data/database.sqlite)
 npm run db:backup
 
 # In the Coolify container (writes /data/backups/app-<timestamp>.db)
@@ -165,8 +175,8 @@ docker exec <container> npm run db:backup
 
 Copy the resulting file (or the whole volume) somewhere else, and prune old
 backups with a scheduled job if you want. Restoring is: stop the app, replace
-`/data/app.db` with the backup, start it. If you copy files by hand rather than
-using the backup command, take `app.db`, `app.db-wal` and `app.db-shm` together.
+`/data/database.sqlite` with the backup, start it. If you copy files by hand rather than
+using the backup command, take `database.sqlite`, `database.sqlite-wal` and `database.sqlite-shm` together.
 
 If you enable Coolify's volume backup feature on the server, that works too.
 

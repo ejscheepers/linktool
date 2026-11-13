@@ -7,7 +7,7 @@ services:
     environment:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:8000}
-      DATABASE_PATH: /data/app.db
+      DATABASE_PATH: /data/database.sqlite
       UPLOAD_DIR: /data/uploads
       APP_TIMEZONE: ${APP_TIMEZONE:-Africa/Johannesburg}
     volumes:
