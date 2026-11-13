@@ -26,7 +26,7 @@ export function AdminShell({
                 <Link2 className="size-4" />
               </span>
               <span className="text-sm font-semibold tracking-tight">
-                Link page admin
+                LinkTool Admin
               </span>
             </NavLink>
 
