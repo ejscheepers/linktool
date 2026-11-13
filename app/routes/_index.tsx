@@ -1,12 +1,16 @@
-import { data } from "react-router";
+import { data, redirect } from "react-router";
 
 import { BioPage } from "@/components/bio-page";
+import { hasUser } from "@/lib/auth.server";
 import { authUrl } from "@/lib/env.server";
 import { listLiveLinks } from "@/lib/links.server";
 import { getProfile } from "@/lib/profile.server";
 import type { Route } from "./+types/_index";
 
 export async function loader({}: Route.LoaderArgs) {
+  // Nothing is set up yet: send the first visitor to create the admin account.
+  if (!hasUser()) throw redirect("/setup");
+
   const profile = getProfile();
   const links = listLiveLinks();
 
@@ -46,9 +50,11 @@ export const meta: Route.MetaFunction = ({ loaderData }) => {
     : undefined;
 
   return [
-    ...(profile.avatarUrl
-      ? [{ tagName: "link" as const, rel: "icon", href: profile.avatarUrl }]
-      : []),
+    {
+      tagName: "link" as const,
+      rel: "icon",
+      href: profile.avatarUrl ?? "/favicon.svg",
+    },
     { title: profile.title },
     { name: "description", content: description },
     { property: "og:type", content: "profile" },

@@ -1,4 +1,4 @@
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Link2 } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import { initials, isDark, readableInk, rgba } from "@/lib/colors";
@@ -153,13 +153,13 @@ export function BioPage({ profile, links, preview = false }: BioPageProps) {
                     />
                   ) : (
                     <div
-                      className="flex size-14 shrink-0 items-center justify-center rounded-xl text-lg font-semibold"
+                      className="flex size-14 shrink-0 items-center justify-center rounded-xl"
                       style={{
                         backgroundColor: rgba(profile.accentColor, 0.15),
                         color: profile.accentColor,
                       }}
                     >
-                      {initials(item.title)}
+                      <Link2 className="size-6" aria-hidden="true" />
                     </div>
                   )}
 

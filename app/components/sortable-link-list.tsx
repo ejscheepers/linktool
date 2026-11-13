@@ -19,6 +19,7 @@ import {
   Eye,
   EyeOff,
   GripVertical,
+  Link2,
   MousePointerClick,
   Pencil,
   Plus,
@@ -97,7 +98,9 @@ function SortableRow({ item }: { item: AdminLink }) {
           className="size-12 shrink-0 rounded-lg object-cover"
         />
       ) : (
-        <div className="size-12 shrink-0 rounded-lg bg-slate-100" />
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+          <Link2 className="size-5" aria-hidden="true" />
+        </div>
       )}
 
       <div className="min-w-0 flex-1">
