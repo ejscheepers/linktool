@@ -15,13 +15,20 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --fund=false \
+# --include=dev keeps the react-router CLI (@react-router/dev) available even
+# when NODE_ENV=production is injected as a build-time variable.
+RUN npm ci --include=dev --no-audit --fund=false \
   && npm rebuild better-sqlite3 sharp
 
 # ---------- build ----------
 FROM deps AS build
 COPY . .
 RUN npm run build
+
+# ---------- production dependencies ----------
+# Prune devDependencies here so the runtime image stays small.
+FROM deps AS prod-deps
+RUN npm prune --omit=dev
 
 # ---------- runtime ----------
 FROM base AS runtime
@@ -31,7 +38,7 @@ ENV NODE_ENV=production \
     DATABASE_PATH=/data/app.db \
     UPLOAD_DIR=/data/uploads
 
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY --from=build /app/drizzle ./drizzle
 COPY --from=build /app/scripts ./scripts
