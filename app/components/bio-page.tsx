@@ -16,6 +16,7 @@ export type BioProfile = {
 export type BioLink = {
   id: string;
   title: string;
+  description?: string | null;
   imageUrl: string | null;
 };
 
@@ -162,8 +163,15 @@ export function BioPage({ profile, links, preview = false }: BioPageProps) {
                     </div>
                   )}
 
-                  <span className="min-w-0 flex-1 truncate font-medium">
-                    {item.title}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">
+                      {item.title}
+                    </span>
+                    {item.description ? (
+                      <span className="mt-0.5 line-clamp-2 block text-xs leading-snug opacity-70">
+                        {item.description}
+                      </span>
+                    ) : null}
                   </span>
 
                   <ArrowUpRight

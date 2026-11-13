@@ -25,6 +25,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const items: AdminLink[] = links.map((item) => ({
     id: item.id,
     title: item.title,
+    description: item.description,
     url: item.url,
     imageUrl: imageUrl(item.imagePath),
     status: linkStatus(item, now),

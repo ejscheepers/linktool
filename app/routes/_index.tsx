@@ -25,6 +25,7 @@ export async function loader({}: Route.LoaderArgs) {
       links: links.map((item) => ({
         id: item.id,
         title: item.title,
+        description: item.description,
         imageUrl: `/uploads/${item.imagePath}`,
       })),
     },
@@ -45,6 +46,9 @@ export const meta: Route.MetaFunction = ({ loaderData }) => {
     : undefined;
 
   return [
+    ...(profile.avatarUrl
+      ? [{ tagName: "link" as const, rel: "icon", href: profile.avatarUrl }]
+      : []),
     { title: profile.title },
     { name: "description", content: description },
     { property: "og:type", content: "profile" },

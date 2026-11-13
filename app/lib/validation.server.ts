@@ -5,6 +5,7 @@ import { zonedInputToDate } from "./dates";
 
 export type LinkFormValues = {
   title: string;
+  description: string;
   url: string;
   startsAt: string;
   expiresAt: string;
@@ -20,6 +21,11 @@ const titleSchema = z
   .trim()
   .min(1, "Give the link a title.")
   .max(120, "Keep the title under 120 characters.");
+
+const descriptionSchema = z
+  .string()
+  .trim()
+  .max(280, "Keep the description under 280 characters.");
 
 const urlSchema = z
   .string()
@@ -48,6 +54,7 @@ function isHttpUrl(value: string): boolean {
 export function readLinkValues(formData: FormData): LinkFormValues {
   return {
     title: String(formData.get("title") ?? ""),
+    description: String(formData.get("description") ?? ""),
     url: String(formData.get("url") ?? ""),
     startsAt: String(formData.get("startsAt") ?? ""),
     expiresAt: String(formData.get("expiresAt") ?? ""),
@@ -57,6 +64,7 @@ export function readLinkValues(formData: FormData): LinkFormValues {
 
 export type ParsedLink = {
   title: string;
+  description: string;
   url: string;
   startsAt: Date | null;
   expiresAt: Date | null;
@@ -70,6 +78,10 @@ export function parseLinkValues(
 
   const title = titleSchema.safeParse(values.title);
   if (!title.success) errors.title = title.error.issues[0]?.message;
+
+  const description = descriptionSchema.safeParse(values.description);
+  if (!description.success)
+    errors.description = description.error.issues[0]?.message;
 
   const rawUrl = urlSchema.safeParse(values.url);
   let url = "";
@@ -102,7 +114,14 @@ export function parseLinkValues(
 
   return {
     ok: true,
-    data: { title: values.title.trim(), url, startsAt, expiresAt, enabled: values.enabled },
+    data: {
+      title: values.title.trim(),
+      description: values.description.trim(),
+      url,
+      startsAt,
+      expiresAt,
+      enabled: values.enabled,
+    },
   };
 }
 

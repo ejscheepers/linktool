@@ -14,6 +14,7 @@ import {
   BUTTON_STYLES,
   type ButtonStyle,
 } from "@/lib/constants";
+import { listLiveLinks } from "@/lib/links.server";
 import { getProfile, updateProfile } from "@/lib/profile.server";
 import { deleteImage, imageUrl, saveImage } from "@/lib/uploads.server";
 import {
@@ -26,14 +27,30 @@ import type { Route } from "./+types/admin.profile";
 export const meta: Route.MetaFunction = () => [{ title: "Page settings" }];
 
 const SAMPLE_LINKS: BioLink[] = [
-  { id: "sample-1", title: "New harvest, new wine", imageUrl: null },
-  { id: "sample-2", title: "Book a tasting", imageUrl: null },
-  { id: "sample-3", title: "Join the wine club", imageUrl: null },
+  {
+    id: "sample-1",
+    title: "My latest project",
+    description: "See what I've been working on.",
+    imageUrl: null,
+  },
+  {
+    id: "sample-2",
+    title: "Read the blog",
+    description: "Notes, updates and ideas.",
+    imageUrl: null,
+  },
+  {
+    id: "sample-3",
+    title: "Get in touch",
+    description: "Questions? Send me a message.",
+    imageUrl: null,
+  },
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
   await requireUser(request);
   const profile = getProfile();
+  const links = listLiveLinks();
 
   return {
     profile: {
@@ -45,6 +62,12 @@ export async function loader({ request }: Route.LoaderArgs) {
       buttonStyle: profile.buttonStyle,
       avatarPath: profile.avatarPath,
     },
+    links: links.map((item) => ({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      imageUrl: imageUrl(item.imagePath),
+    })),
   };
 }
 
@@ -313,7 +336,9 @@ export default function ProfileSettings({
                     : "#b45309",
                 buttonStyle,
               }}
-              links={SAMPLE_LINKS}
+              links={
+                loaderData.links.length > 0 ? loaderData.links : SAMPLE_LINKS
+              }
             />
           </div>
         </div>

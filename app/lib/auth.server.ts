@@ -77,6 +77,9 @@ export async function getSession(request: Request) {
 
 /** Throw a redirect to /login (keeping the current path) when signed out. */
 export async function requireUser(request: Request) {
+  // No account exists yet: the first run belongs in /setup, not /login.
+  if (!hasUser()) throw redirect("/setup");
+
   const session = await getSession(request);
   if (!session) {
     const url = new URL(request.url);

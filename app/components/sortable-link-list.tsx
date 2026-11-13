@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 export type AdminLink = {
   id: string;
   title: string;
+  description: string;
   url: string;
   imageUrl: string | null;
   status: BadgeStatus;
@@ -103,6 +104,9 @@ function SortableRow({ item }: { item: AdminLink }) {
         <p className="truncate text-sm font-medium text-slate-900">
           {item.title}
         </p>
+        {item.description ? (
+          <p className="truncate text-xs text-slate-600">{item.description}</p>
+        ) : null}
         <p className="truncate text-xs text-slate-500">{hostname(item.url)}</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
           <StatusBadge status={item.status} />

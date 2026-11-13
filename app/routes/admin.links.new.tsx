@@ -40,6 +40,7 @@ export async function action({ request }: Route.ActionArgs) {
   db.insert(linkTable)
     .values({
       title: parsed.data.title,
+      description: parsed.data.description,
       url: parsed.data.url,
       startsAt: parsed.data.startsAt,
       expiresAt: parsed.data.expiresAt,
@@ -67,6 +68,7 @@ export default function NewLink({ actionData }: Route.ComponentProps) {
         submitLabel="Add link"
         defaultValues={{
           title: "",
+          description: "",
           url: "",
           startsAt: "",
           expiresAt: "",

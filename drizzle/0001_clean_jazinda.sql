@@ -1,0 +1,1 @@
+ALTER TABLE `link` ADD `description` text DEFAULT '' NOT NULL;

@@ -33,6 +33,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     link: {
       id: item.id,
       title: item.title,
+      description: item.description,
       url: item.url,
       imageUrl: imageUrl(item.imagePath),
       clickCount: item.clickCount,
@@ -78,6 +79,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   db.update(linkTable)
     .set({
       title: parsed.data.title,
+      description: parsed.data.description,
       url: parsed.data.url,
       startsAt: parsed.data.startsAt,
       expiresAt: parsed.data.expiresAt,
@@ -106,6 +108,7 @@ export default function EditLink({ loaderData, actionData }: Route.ComponentProp
         submitLabel="Save changes"
         defaultValues={{
           title: link.title,
+          description: link.description,
           url: link.url,
           startsAt: link.startsAt,
           expiresAt: link.expiresAt,

@@ -5,6 +5,7 @@ import { Form, Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { timeZoneLabel } from "@/lib/env.shared";
 import type {
   LinkFormErrors,
@@ -67,7 +68,8 @@ export function LinkForm({
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Link</h2>
           <p className="text-xs text-slate-500">
-            The title and image people see. The image is cropped to a square.
+            The title, description and image people see. The image is cropped to
+            a square.
           </p>
         </div>
 
@@ -116,12 +118,33 @@ export function LinkForm({
                 name="title"
                 maxLength={120}
                 required
-                placeholder="New harvest, new wine"
+                placeholder="My latest project"
                 defaultValue={defaultValues.title}
               />
               {errors?.title ? (
                 <p className="text-xs font-medium text-red-600">{errors.title}</p>
               ) : null}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                name="description"
+                rows={2}
+                maxLength={280}
+                placeholder="A short line about this link (optional)"
+                defaultValue={defaultValues.description}
+              />
+              {errors?.description ? (
+                <p className="text-xs font-medium text-red-600">
+                  {errors.description}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Optional. Shown under the title on your page.
+                </p>
+              )}
             </div>
 
             <div className="grid gap-2">
@@ -131,7 +154,7 @@ export function LinkForm({
                 name="url"
                 inputMode="url"
                 required
-                placeholder="https://dailywine.co.za/shop"
+                placeholder="https://example.com"
                 defaultValue={defaultValues.url}
               />
               {errors?.url ? (

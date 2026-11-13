@@ -1,4 +1,4 @@
-import { Link, Form, redirect } from "react-router";
+import { Form, redirect } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -23,11 +23,13 @@ import type { Route } from "./+types/login";
 export const meta: Route.MetaFunction = () => [{ title: "Sign in" }];
 
 export async function loader({ request }: Route.LoaderArgs) {
+  // With no admin account there is nothing to sign in to yet.
+  if (!hasUser()) throw redirect("/setup");
+
   const session = await getSession(request);
   if (session) throw redirect("/admin");
 
   return {
-    hasUser: hasUser(),
     next: safeNext(new URL(request.url).searchParams.get("next")),
   };
 }
@@ -110,15 +112,6 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
             <Button type="submit" className="w-full">
               Sign in
             </Button>
-
-            {!loaderData.hasUser ? (
-              <p className="text-center text-sm text-slate-600">
-                First time here?{" "}
-                <Link to="/setup" className="font-medium underline">
-                  Create the admin account
-                </Link>
-              </p>
-            ) : null}
           </Form>
         </CardContent>
       </Card>

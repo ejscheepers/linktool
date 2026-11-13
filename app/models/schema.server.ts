@@ -100,6 +100,7 @@ export const link = sqliteTable(
       .primaryKey()
       .$defaultFn(() => createId()),
     title: text("title").notNull(),
+    description: text("description").notNull().default(""),
     url: text("url").notNull(),
     imagePath: text("image_path").notNull(),
     position: integer("position").notNull().default(0),
