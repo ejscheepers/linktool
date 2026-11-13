@@ -3,8 +3,25 @@ import fs from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 
-export const uploadDir =
-  process.env.UPLOAD_DIR || path.join(process.cwd(), "data", "uploads");
+const configuredUploadDir = process.env.UPLOAD_DIR?.trim();
+export const uploadDir = path.resolve(
+  configuredUploadDir || path.join(process.cwd(), "data", "uploads")
+);
+
+// Same trap as DATABASE_PATH: a relative path writes inside the container, so
+// uploads vanish on the next deploy. Say it out loud in production.
+if (
+  process.env.NODE_ENV === "production" &&
+  configuredUploadDir &&
+  !path.isAbsolute(configuredUploadDir)
+) {
+  console.warn(
+    `[linktool] UPLOAD_DIR="${configuredUploadDir}" is relative and resolves to ${uploadDir} inside the container. ` +
+      `Set an absolute path (for example /data/uploads) so uploads live on the mounted volume.`
+  );
+}
+
+console.log(`[linktool] uploads: ${uploadDir}`);
 
 fs.mkdirSync(uploadDir, { recursive: true });
 

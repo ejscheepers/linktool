@@ -7,8 +7,26 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import * as schema from "@/models/schema.server";
 
-const databasePath =
-  process.env.DATABASE_PATH || path.join(process.cwd(), "data", "database.sqlite");
+const configuredPath = process.env.DATABASE_PATH?.trim();
+const databasePath = path.resolve(
+  configuredPath || path.join(process.cwd(), "data", "database.sqlite")
+);
+
+// A relative DATABASE_PATH resolves against the container's WORKDIR, not the
+// mounted volume, so every deploy starts from an empty database. Fail loudly
+// instead of letting that happen quietly.
+if (
+  process.env.NODE_ENV === "production" &&
+  configuredPath &&
+  !path.isAbsolute(configuredPath)
+) {
+  console.warn(
+    `[linktool] DATABASE_PATH="${configuredPath}" is relative and resolves to ${databasePath} inside the container. ` +
+      `Set an absolute path (for example /data/database.sqlite) so the database lives on the mounted volume.`
+  );
+}
+
+console.log(`[linktool] database: ${databasePath}`);
 
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 

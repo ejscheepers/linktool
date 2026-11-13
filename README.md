@@ -42,6 +42,7 @@ on first use.
 | ------------------- | -------- | ----------------------- | ------------------------------------------------ |
 | `BETTER_AUTH_SECRET`| yes      | dev fallback only       | Long random string. Generate with `openssl rand -base64 32`. |
 | `BETTER_AUTH_URL`   | yes      | `http://localhost:5173` | Public origin, e.g. `https://links.dailywine.co.za`. |
+| `PRIMARY_HOST`      | no       | `BETTER_AUTH_URL`       | Full URL of an extra public host, if the app answers on more than one. |
 | `DATABASE_PATH`     | no       | `./data/database.sqlite`| SQLite file. In Docker: `/data/database.sqlite`. |
 | `UPLOAD_DIR`        | no       | `./data/uploads`        | Where WebP images are written. In Docker: `/data/uploads`. |
 | `APP_TIMEZONE`      | no       | `Africa/Johannesburg`   | Timezone used by the date pickers and formatting.|
@@ -49,8 +50,9 @@ on first use.
 | `ALLOWED_ACTION_ORIGINS` | no  | primary host            | Extra hosts for React Router action posts. Build-time in Coolify. |
 | `TRUSTED_ORIGINS`   | no       | `BETTER_AUTH_URL`       | Extra full origins better-auth should trust (comma-separated). |
 
-`links.dailywine.co.za` is built into `app/lib/origins.ts` as the primary host,
-so a standard deploy needs neither of the last two variables.
+The public host comes from `BETTER_AUTH_URL`, so the same image can serve a
+second deployment on another domain with no code change. Set `PRIMARY_HOST` (a
+full URL) only when the app also answers on a second host.
 
 ## How link visibility works
 
@@ -159,6 +161,26 @@ route closes itself permanently after the first user exists.
   cleanup settings. That job runs `docker volume prune -af`, which deletes this
   database's volume whenever the container happens to be stopped (a stop/start,
   a crash loop, or an overnight stop) — the data is gone for good.
+
+#### Running a second instance (another brand)
+
+Each brand gets its own Coolify application built from this repo. Check these in
+order — every one of them has broken a deploy at least once:
+
+- **Source:** use the team's GitHub App, not "Public GitHub". A private repo
+  with a deploy key that was never registered on GitHub fails at `git ls-remote`
+  with `Permission denied (publickey)`.
+- **Domain:** the FQDN must match `BETTER_AUTH_URL` exactly. A typo lands in the
+  Traefik rule and in the ACME request (`rejectedIdentifier … does not end with
+  a valid public suffix`) and the app stays unreachable while looking healthy.
+- **Port:** `ports_exposes` must be `8000`, the port the container listens on.
+  Anything else points Traefik at a dead port and returns 503.
+- **Paths:** `DATABASE_PATH=/data/database.sqlite` and
+  `UPLOAD_DIR=/data/uploads`, both absolute. Relative paths resolve inside the
+  container and are wiped on every deploy; the app logs a warning at boot when
+  it sees one.
+- **Storage:** one volume at `/data` (or a linked Coolify SQLite resource) plus a
+  separate volume at `/data/uploads`.
 
 #### Backups
 

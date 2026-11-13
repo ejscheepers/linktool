@@ -6,9 +6,12 @@
  * `Origin: https://…` while the Node process may see an `http://…` request URL.
  * React Router rejects action posts when those disagree, so the public host is
  * allowed explicitly.
+ *
+ * The host comes from BETTER_AUTH_URL, so the same image can serve several
+ * deployments on different domains (one brand per app). PRIMARY_HOST is only
+ * needed when the app answers on a second host as well — a full URL, e.g.
+ * `https://link.example.com`.
  */
-
-export const PRIMARY_HOST = "links.dailywine.co.za";
 
 function toHost(value: string): string | null {
   try {
@@ -35,7 +38,13 @@ function envList(name: string): string[] {
 
 /** Hosts (no scheme) React Router should accept actions from. */
 export function allowedActionHosts(): string[] {
-  const hosts = new Set<string>([PRIMARY_HOST]);
+  const hosts = new Set<string>();
+
+  const primary = process.env.PRIMARY_HOST?.trim();
+  if (primary) {
+    const host = toHost(primary) ?? primary;
+    if (host) hosts.add(host);
+  }
 
   const authUrl = process.env.BETTER_AUTH_URL;
   if (authUrl) {
@@ -52,7 +61,13 @@ export function allowedActionHosts(): string[] {
 
 /** Full origins (scheme + host) better-auth should trust. */
 export function trustedOrigins(authUrl: string): string[] {
-  const origins = new Set<string>([`https://${PRIMARY_HOST}`]);
+  const origins = new Set<string>();
+
+  const primary = process.env.PRIMARY_HOST?.trim();
+  if (primary) {
+    const origin = toOrigin(primary);
+    if (origin) origins.add(origin);
+  }
 
   const base = toOrigin(authUrl);
   if (base) origins.add(base);
