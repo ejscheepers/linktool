@@ -93,7 +93,6 @@ export async function action({ request }: Route.ActionArgs) {
       return data({ errors }, { status: 400 });
     }
     avatarPath = avatar.filename;
-    deleteImage(current.avatarPath);
   }
 
   updateProfile({
@@ -104,6 +103,9 @@ export async function action({ request }: Route.ActionArgs) {
     accentColor: parsed.data.accentColor,
     buttonStyle: parsed.data.buttonStyle,
   });
+
+  // Delete after the update so the reference check sees the new avatarPath.
+  deleteImage(current.avatarPath);
 
   return { saved: true };
 }

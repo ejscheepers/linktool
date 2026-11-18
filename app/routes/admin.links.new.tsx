@@ -41,7 +41,7 @@ export async function action({ request }: Route.ActionArgs) {
     file instanceof File && file.size > 0
       ? await saveImage(file, 400)
       : previousImage
-        ? await reuseImage(previousImage, 400)
+        ? await reuseImage(previousImage)
         : await saveImage(file, 400);
 
   if (!image.ok) {

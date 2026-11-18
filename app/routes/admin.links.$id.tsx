@@ -28,6 +28,9 @@ export const meta: Route.MetaFunction = () => [{ title: "Edit link" }];
 export async function loader({ request, params }: Route.LoaderArgs) {
   await requireUser(request);
 
+  // May normalise old duplicate filenames, so read the link afterwards.
+  const images = await listImages();
+
   const item = getLink(params.id);
   if (!item) throw new Response("Link not found", { status: 404 });
 
@@ -43,7 +46,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       expiresAt: dateToZonedInput(item.expiresAt),
       enabled: item.enabled,
     },
-    images: await listImages(),
+    images,
   };
 }
 
@@ -78,14 +81,12 @@ export async function action({ request, params }: Route.ActionArgs) {
       return data({ errors: { image: image.error } }, { status: 400 });
     }
     imagePath = image.filename;
-    deleteImage(item.imagePath);
   } else if (previousImage) {
-    const image = await reuseImage(previousImage, 400);
+    const image = await reuseImage(previousImage);
     if (!image.ok) {
       return data({ errors: { image: image.error } }, { status: 400 });
     }
     imagePath = image.filename;
-    deleteImage(item.imagePath);
   }
 
   db.update(linkTable)
@@ -101,6 +102,9 @@ export async function action({ request, params }: Route.ActionArgs) {
     })
     .where(eq(linkTable.id, item.id))
     .run();
+
+  // Delete after the update so the reference check sees the new imagePath.
+  deleteImage(item.imagePath);
 
   return redirect("/admin");
 }

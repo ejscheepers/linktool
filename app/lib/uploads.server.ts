@@ -1,7 +1,12 @@
-import { createId } from "@paralleldrive/cuid2";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+
+import { eq } from "drizzle-orm";
 import sharp from "sharp";
+
+import { link, profile } from "@/models/schema.server";
+import { db } from "@/utils/db.server";
 
 const configuredUploadDir = process.env.UPLOAD_DIR?.trim();
 export const uploadDir = path.resolve(
@@ -44,7 +49,11 @@ export type ImageLibraryEntry = {
   updatedAt: number;
 };
 
-/** Crop an image buffer to a square WebP and write it to the upload dir. */
+/**
+ * Crop an image buffer to a square WebP and write it to the upload dir.
+ * The filename is derived from the encoded bytes, so uploading the same image
+ * twice (or reusing it) resolves to a single file on disk.
+ */
 async function writeCroppedImage(input: Buffer, size: number): Promise<string> {
   const output = await sharp(input)
     .rotate()
@@ -52,8 +61,17 @@ async function writeCroppedImage(input: Buffer, size: number): Promise<string> {
     .webp({ quality: 82 })
     .toBuffer();
 
-  const filename = `${size}-${createId()}.webp`;
-  await fs.promises.writeFile(path.join(uploadDir, filename), output);
+  const hash = createHash("sha256").update(output).digest("hex");
+  const filename = `${size}-${hash}.webp`;
+  const filePath = path.join(uploadDir, filename);
+
+  try {
+    // "wx" never overwrites: an identical image is already de-duplicated.
+    await fs.promises.writeFile(filePath, output, { flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  }
+
   return filename;
 }
 
@@ -87,21 +105,18 @@ export async function saveImage(
 }
 
 /**
- * Copy an already-uploaded image into a new file so links never share a file.
- * Sharing would mean deleting one link (or replacing its image) silently breaks
- * the other link that reused it.
+ * Point a link at an already-uploaded image. Files are reference-counted by
+ * deleteImage(), so one file can safely be shared by several links without
+ * creating a duplicate copy.
  */
-export async function reuseImage(
-  filename: string,
-  size = 400
-): Promise<ImageResult> {
+export async function reuseImage(filename: string): Promise<ImageResult> {
   if (!isImageFilename(filename)) {
     return { ok: false, error: "That image is not available." };
   }
 
   try {
-    const input = await fs.promises.readFile(path.join(uploadDir, filename));
-    return { ok: true, filename: await writeCroppedImage(input, size) };
+    await fs.promises.access(path.join(uploadDir, filename), fs.constants.R_OK);
+    return { ok: true, filename };
   } catch {
     return {
       ok: false,
@@ -110,8 +125,88 @@ export async function reuseImage(
   }
 }
 
-/** Newest-first list of images already stored on disk, for the reuse picker. */
+let dedupePromise: Promise<void> | null = null;
+
+function dedupeOnce(): Promise<void> {
+  dedupePromise ??= dedupeImages().catch(() => {
+    // Never block the picker on a cleanup failure; try again next time.
+    dedupePromise = null;
+  });
+  return dedupePromise;
+}
+
+/**
+ * Consolidate duplicate files left behind by older versions, which copied an
+ * image whenever it was reused. All references are pointed at the
+ * content-addressed copy before the redundant files are removed.
+ */
+export async function dedupeImages(): Promise<void> {
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(uploadDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  const filenames = entries
+    .filter((entry) => entry.isFile() && isImageFilename(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+
+  const groups = new Map<string, string[]>();
+  for (const filename of filenames) {
+    try {
+      const data = await fs.promises.readFile(path.join(uploadDir, filename));
+      const hash = createHash("sha256").update(data).digest("hex");
+      const group = groups.get(hash);
+      if (group) group.push(filename);
+      else groups.set(hash, [filename]);
+    } catch {
+      // Unreadable file: leave it alone.
+    }
+  }
+
+  for (const [hash, names] of groups) {
+    const size = names[0].split("-")[0];
+    const target = `${size}-${hash}.webp`;
+    if (target === names[0] && names.length === 1) continue;
+
+    if (!names.includes(target)) {
+      try {
+        await fs.promises.copyFile(
+          path.join(uploadDir, names[0]),
+          path.join(uploadDir, target),
+          fs.constants.COPYFILE_EXCL
+        );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") continue;
+      }
+    }
+
+    db.transaction((tx) => {
+      for (const name of names) {
+        if (name === target) continue;
+        tx.update(link)
+          .set({ imagePath: target })
+          .where(eq(link.imagePath, name))
+          .run();
+        tx.update(profile)
+          .set({ avatarPath: target })
+          .where(eq(profile.avatarPath, name))
+          .run();
+      }
+    });
+
+    for (const name of names) {
+      if (name !== target) deleteImage(name);
+    }
+  }
+}
+
+/** Newest-first list of unique images on disk, for the reuse picker. */
 export async function listImages(limit = 60): Promise<ImageLibraryEntry[]> {
+  await dedupeOnce();
+
   try {
     const entries = await fs.promises.readdir(uploadDir, {
       withFileTypes: true,
@@ -145,13 +240,35 @@ export async function listImages(limit = 60): Promise<ImageLibraryEntry[]> {
   }
 }
 
-/** Recursive-safe check: filenames we generate are `NNN-<cuid>.webp`. */
+/** Recursive-safe check: filenames we generate are `NNN-<sha256>.webp`. */
 export function isImageFilename(filename: string): boolean {
   return /^\d{2,4}-[a-z0-9]+\.webp$/.test(filename);
 }
 
+/** True while any link or the profile avatar still points at this file. */
+export function isImageInUse(filename: string): boolean {
+  const usedByLink = db
+    .select({ id: link.id })
+    .from(link)
+    .where(eq(link.imagePath, filename))
+    .get();
+  if (usedByLink) return true;
+
+  const usedByProfile = db
+    .select({ id: profile.id })
+    .from(profile)
+    .where(eq(profile.avatarPath, filename))
+    .get();
+  return Boolean(usedByProfile);
+}
+
+/**
+ * Remove an image only once nothing references it. Shared files are expected:
+ * image filenames are content hashes, and reused images point at the same file.
+ */
 export function deleteImage(filename: string | null | undefined): void {
   if (!filename || !isImageFilename(filename)) return;
+  if (isImageInUse(filename)) return;
   fs.promises.unlink(path.join(uploadDir, filename)).catch(() => {
     /* already gone */
   });
