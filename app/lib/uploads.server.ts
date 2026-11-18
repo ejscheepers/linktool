@@ -38,6 +38,25 @@ export type ImageResult =
   | { ok: true; filename: string }
   | { ok: false; error: string };
 
+export type ImageLibraryEntry = {
+  filename: string;
+  url: string;
+  updatedAt: number;
+};
+
+/** Crop an image buffer to a square WebP and write it to the upload dir. */
+async function writeCroppedImage(input: Buffer, size: number): Promise<string> {
+  const output = await sharp(input)
+    .rotate()
+    .resize(size, size, { fit: "cover", position: "attention" })
+    .webp({ quality: 82 })
+    .toBuffer();
+
+  const filename = `${size}-${createId()}.webp`;
+  await fs.promises.writeFile(path.join(uploadDir, filename), output);
+  return filename;
+}
+
 /**
  * Accept an uploaded image, crop it to a square and store it as WebP.
  * Returns the generated filename (stored in the DB, served from /uploads/:file).
@@ -61,17 +80,68 @@ export async function saveImage(
 
   try {
     const input = Buffer.from(await file.arrayBuffer());
-    const output = await sharp(input)
-      .rotate()
-      .resize(size, size, { fit: "cover", position: "attention" })
-      .webp({ quality: 82 })
-      .toBuffer();
-
-    const filename = `${size}-${createId()}.webp`;
-    await fs.promises.writeFile(path.join(uploadDir, filename), output);
-    return { ok: true, filename };
+    return { ok: true, filename: await writeCroppedImage(input, size) };
   } catch {
     return { ok: false, error: "That file could not be read as an image." };
+  }
+}
+
+/**
+ * Copy an already-uploaded image into a new file so links never share a file.
+ * Sharing would mean deleting one link (or replacing its image) silently breaks
+ * the other link that reused it.
+ */
+export async function reuseImage(
+  filename: string,
+  size = 400
+): Promise<ImageResult> {
+  if (!isImageFilename(filename)) {
+    return { ok: false, error: "That image is not available." };
+  }
+
+  try {
+    const input = await fs.promises.readFile(path.join(uploadDir, filename));
+    return { ok: true, filename: await writeCroppedImage(input, size) };
+  } catch {
+    return {
+      ok: false,
+      error: "That image is no longer available. Pick another one.",
+    };
+  }
+}
+
+/** Newest-first list of images already stored on disk, for the reuse picker. */
+export async function listImages(limit = 60): Promise<ImageLibraryEntry[]> {
+  try {
+    const entries = await fs.promises.readdir(uploadDir, {
+      withFileTypes: true,
+    });
+
+    const images = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile() && isImageFilename(entry.name))
+        .map(async (entry) => {
+          try {
+            const stat = await fs.promises.stat(
+              path.join(uploadDir, entry.name)
+            );
+            return {
+              filename: entry.name,
+              url: `/uploads/${entry.name}`,
+              updatedAt: stat.mtimeMs,
+            };
+          } catch {
+            return null;
+          }
+        })
+    );
+
+    return images
+      .filter((image): image is ImageLibraryEntry => image !== null)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, limit);
+  } catch {
+    return [];
   }
 }
 

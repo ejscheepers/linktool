@@ -4,7 +4,11 @@ import { LinkForm } from "@/components/link-form";
 import { PageHeader } from "@/components/page-header";
 import { requireUser } from "@/lib/auth.server";
 import { nextPosition } from "@/lib/links.server";
-import { saveImage } from "@/lib/uploads.server";
+import {
+  listImages,
+  reuseImage,
+  saveImage,
+} from "@/lib/uploads.server";
 import {
   parseLinkValues,
   readLinkValues,
@@ -17,7 +21,7 @@ export const meta: Route.MetaFunction = () => [{ title: "New link" }];
 
 export async function loader({ request }: Route.LoaderArgs) {
   await requireUser(request);
-  return null;
+  return { images: await listImages() };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -31,7 +35,15 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ errors: parsed.errors }, { status: 400 });
   }
 
-  const image = await saveImage(formData.get("image"), 400);
+  const file = formData.get("image");
+  const previousImage = String(formData.get("existingImage") ?? "");
+  const image =
+    file instanceof File && file.size > 0
+      ? await saveImage(file, 400)
+      : previousImage
+        ? await reuseImage(previousImage, 400)
+        : await saveImage(file, 400);
+
   if (!image.ok) {
     return data({ errors: { image: image.error } }, { status: 400 });
   }
@@ -55,7 +67,10 @@ export async function action({ request }: Route.ActionArgs) {
   return redirect("/admin");
 }
 
-export default function NewLink({ actionData }: Route.ComponentProps) {
+export default function NewLink({
+  loaderData,
+  actionData,
+}: Route.ComponentProps) {
   return (
     <div className="space-y-6">
       <PageHeader
@@ -75,6 +90,7 @@ export default function NewLink({ actionData }: Route.ComponentProps) {
           enabled: true,
         }}
         errors={actionData?.errors}
+        imageLibrary={loaderData.images}
       />
     </div>
   );

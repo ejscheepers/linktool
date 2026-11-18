@@ -11,6 +11,7 @@ single container plus one volume.
 
 - **Public page** at `/` with avatar, title, bio and link cards.
 - **Links** with a title, destination URL, square image and drag-and-drop order.
+- **Image reuse**: pick any previously uploaded image instead of uploading a new one.
 - **Scheduling**: optional *show from* and *hide after* dates. Expired links
   disappear from the page immediately, without any cron job.
 - **Click tracking**: every tap goes through `/l/:id`, is stored as its own row

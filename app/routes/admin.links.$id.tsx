@@ -11,6 +11,8 @@ import { getLink } from "@/lib/links.server";
 import {
   deleteImage,
   imageUrl,
+  listImages,
+  reuseImage,
   saveImage,
 } from "@/lib/uploads.server";
 import {
@@ -41,6 +43,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       expiresAt: dateToZonedInput(item.expiresAt),
       enabled: item.enabled,
     },
+    images: await listImages(),
   };
 }
 
@@ -67,8 +70,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   let imagePath = item.imagePath;
   const file = formData.get("image");
+  const previousImage = String(formData.get("existingImage") ?? "");
+
   if (file instanceof File && file.size > 0) {
     const image = await saveImage(file, 400);
+    if (!image.ok) {
+      return data({ errors: { image: image.error } }, { status: 400 });
+    }
+    imagePath = image.filename;
+    deleteImage(item.imagePath);
+  } else if (previousImage) {
+    const image = await reuseImage(previousImage, 400);
     if (!image.ok) {
       return data({ errors: { image: image.error } }, { status: 400 });
     }
@@ -116,6 +128,7 @@ export default function EditLink({ loaderData, actionData }: Route.ComponentProp
         }}
         errors={actionData?.errors}
         imageUrl={link.imageUrl}
+        imageLibrary={loaderData.images}
       />
 
       <section className="rounded-2xl border border-red-200 bg-red-50/50 p-5">

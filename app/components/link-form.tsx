@@ -1,4 +1,4 @@
-import { ImagePlus } from "lucide-react";
+import { Check, ImagePlus, Images } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Form, Link } from "react-router";
 
@@ -12,10 +12,16 @@ import type {
   LinkFormValues,
 } from "@/lib/validation.server";
 
+type LibraryImage = {
+  filename: string;
+  url: string;
+};
+
 type LinkFormProps = {
   defaultValues: LinkFormValues;
   errors?: LinkFormErrors;
   imageUrl?: string | null;
+  imageLibrary?: LibraryImage[];
   submitLabel: string;
   cancelHref?: string;
   extra?: React.ReactNode;
@@ -25,12 +31,16 @@ export function LinkForm({
   defaultValues,
   errors,
   imageUrl,
+  imageLibrary = [],
   submitLabel,
   cancelHref = "/admin",
   extra,
 }: LinkFormProps) {
   const [preview, setPreview] = useState<string | null>(imageUrl ?? null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const previewUrl = useRef<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return () => {
@@ -38,12 +48,17 @@ export function LinkForm({
     };
   }, []);
 
-  function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+  function clearObjectUrl() {
     if (previewUrl.current) {
       URL.revokeObjectURL(previewUrl.current);
       previewUrl.current = null;
     }
+  }
+
+  function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    clearObjectUrl();
+    setSelectedImage(null);
     if (!file) {
       setPreview(imageUrl ?? null);
       return;
@@ -51,6 +66,14 @@ export function LinkForm({
     const objectUrl = URL.createObjectURL(file);
     previewUrl.current = objectUrl;
     setPreview(objectUrl);
+  }
+
+  function choosePrevious(image: LibraryImage) {
+    clearObjectUrl();
+    if (fileInput.current) fileInput.current.value = "";
+    setSelectedImage(image.filename);
+    setPreview(image.url);
+    setLibraryOpen(false);
   }
 
   return (
@@ -93,6 +116,7 @@ export function LinkForm({
               )}
             </label>
             <input
+              ref={fileInput}
               id="image"
               name="image"
               type="file"
@@ -100,9 +124,31 @@ export function LinkForm({
               className="sr-only"
               onChange={onFileChange}
             />
+            <input
+              type="hidden"
+              name="existingImage"
+              value={selectedImage ?? ""}
+            />
             <p className="mt-2 max-w-28 text-center text-[11px] leading-tight text-slate-500">
-              {imageUrl ? "Choose a new image to replace it." : "JPG, PNG or WebP up to 10 MB."}
+              {selectedImage
+                ? "Using a previous upload."
+                : imageUrl
+                  ? "Choose a new image to replace it."
+                  : "JPG, PNG or WebP up to 10 MB."}
             </p>
+            {imageLibrary.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 w-28"
+                aria-expanded={libraryOpen}
+                onClick={() => setLibraryOpen((open) => !open)}
+              >
+                <Images />
+                Reuse
+              </Button>
+            ) : null}
             {errors?.image ? (
               <p className="mt-1 text-xs font-medium text-red-600">
                 {errors.image}
@@ -167,6 +213,56 @@ export function LinkForm({
             </div>
           </div>
         </div>
+
+        {libraryOpen && imageLibrary.length > 0 ? (
+          <div className="rounded-xl border bg-slate-50 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium text-slate-700">
+                Previous uploads
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => setLibraryOpen(false)}
+              >
+                Close
+              </Button>
+            </div>
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
+              {imageLibrary.map((image) => {
+                const selected = selectedImage === image.filename;
+                return (
+                  <button
+                    key={image.filename}
+                    type="button"
+                    title="Use this image"
+                    aria-label="Use this image"
+                    aria-pressed={selected}
+                    onClick={() => choosePrevious(image)}
+                    className={`relative aspect-square overflow-hidden rounded-lg border-2 bg-white transition ${
+                      selected
+                        ? "border-slate-900 ring-2 ring-slate-900/10"
+                        : "border-transparent hover:border-slate-300"
+                    }`}
+                  >
+                    <img
+                      src={image.url}
+                      alt=""
+                      loading="lazy"
+                      className="size-full object-cover"
+                    />
+                    {selected ? (
+                      <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-slate-900 text-white">
+                        <Check className="size-3" />
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-4 rounded-2xl border bg-white p-5">
