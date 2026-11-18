@@ -128,17 +128,17 @@ export async function reuseImage(filename: string): Promise<ImageResult> {
 let dedupePromise: Promise<void> | null = null;
 
 function dedupeOnce(): Promise<void> {
-  dedupePromise ??= dedupeImages().catch(() => {
-    // Never block the picker on a cleanup failure; try again next time.
+  dedupePromise ??= dedupeImages().finally(() => {
+    // Run again on the next picker load so new duplicates are also caught.
     dedupePromise = null;
   });
   return dedupePromise;
 }
 
 /**
- * Consolidate duplicate files left behind by older versions, which copied an
- * image whenever it was reused. All references are pointed at the
- * content-addressed copy before the redundant files are removed.
+ * Consolidate only files whose bytes are exactly identical. Similar-looking
+ * images are deliberately left alone: re-encoded copies may look the same but
+ * are not safe to delete automatically.
  */
 export async function dedupeImages(): Promise<void> {
   let entries: fs.Dirent[];
@@ -167,9 +167,15 @@ export async function dedupeImages(): Promise<void> {
   }
 
   for (const [hash, names] of groups) {
-    const size = names[0].split("-")[0];
+    // A single file is already unique. Never rewrite it just to normalise its
+    // name; only act when there are byte-for-byte duplicates.
+    if (names.length < 2) continue;
+
+    const canonical = names.find(
+      (name) => name === `${name.split("-")[0]}-${hash}.webp`
+    );
+    const size = (canonical ?? names[0]).split("-")[0];
     const target = `${size}-${hash}.webp`;
-    if (target === names[0] && names.length === 1) continue;
 
     if (!names.includes(target)) {
       try {
@@ -198,14 +204,17 @@ export async function dedupeImages(): Promise<void> {
     });
 
     for (const name of names) {
-      if (name !== target) deleteImage(name);
+      if (name === target) continue;
+      deleteImage(name);
     }
   }
 }
 
 /** Newest-first list of unique images on disk, for the reuse picker. */
 export async function listImages(limit = 60): Promise<ImageLibraryEntry[]> {
-  await dedupeOnce();
+  await dedupeOnce().catch(() => {
+    // Never block the picker on a cleanup failure.
+  });
 
   try {
     const entries = await fs.promises.readdir(uploadDir, {
